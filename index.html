@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skate Radio</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --cream: #f0ede4;
+  --blue: #007bff;
+  --blue-bg: #011432;
+  --blue-border: rgba(0,81,255,0.2);
+  --divider: rgba(255,255,255,0.1);
+}
+html, body {
+  width:100%; min-height:100%;
+  background:#000; color:#fff;
+  font-family:'Inter',sans-serif;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+/* Canvas fixed behind everything */
+#wheel-canvas {
+  position:fixed; top:0; left:0;
+  width:100vw; height:100vh;
+  z-index:0; display:block;
+  pointer-events:none;
+}
+
+/* App overlay */
+#app {
+  position:relative; z-index:1;
+  min-height:100vh;
+  display:flex; flex-direction:column;
+  background:linear-gradient(220deg,
+    rgba(0,0,0,0.88) 0%,
+    rgba(20,20,20,0.65) 50%,
+    rgba(18,18,18,0.6) 66%,
+    rgba(0,0,0,0.88) 97%);
+}
+
+/* ── HEADER ── */
+#header {
+  position:fixed; top:0; left:0; right:0; z-index:50;
+  padding:10px 80px;
+  background:rgba(0,0,0,0.55);
+  backdrop-filter:blur(12px);
+  display:flex; flex-direction:column; gap:6px;
+}
+.header-row {
+  display:flex; align-items:center; justify-content:space-between;
+}
+.brand { font-size:24px; font-weight:400; color:#fff; letter-spacing:-0.01em; }
+.header-eyebrow { font-size:8px; color:rgba(255,255,255,0.5); letter-spacing:0.05em; }
+.header-divider { height:1px; background:var(--divider); }
+.btn-playlist {
+  background:var(--blue-bg);
+  border:1.5px solid var(--blue-border);
+  border-radius:3px; padding:8px 24px 10px;
+  font-size:12px; color:var(--blue);
+  font-family:'Inter',sans-serif;
+  text-decoration:none; cursor:pointer;
+  display:inline-flex; align-items:center;
+  transition:background 0.15s;
+  pointer-events:all;
+}
+.btn-playlist:hover { background:rgba(0,123,255,0.12); }
+
+/* ── MAIN SPLIT LAYOUT ── */
+#main {
+  flex:1; display:flex; align-items:stretch;
+  padding-top:57px; min-height:100vh;
+}
+
+/* LEFT COLUMN */
+#left-col {
+  width:36%; min-width:300px; max-width:460px;
+  flex-shrink:0;
+  padding:80px 0 80px 80px;
+  display:flex; flex-direction:column;
+  justify-content:center; gap:48px;
+  pointer-events:all;
+}
+
+.featured-block { display:flex; flex-direction:column; gap:12px; }
+
+.featured-meta { display:flex; flex-direction:column; gap:6px; width:240px; }
+.eyebrow { font-size:8px; color:rgba(255,255,255,0.55); letter-spacing:0.05em; }
+.eyebrow-line { height:1px; background:var(--divider); }
+.now-featured { font-size:12px; color:rgba(255,255,255,0.8); }
+
+.track-info { display:flex; flex-direction:column; gap:6px; }
+.track-title {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(52px,5.5vw,79px);
+  line-height:0.9; color:var(--cream);
+  letter-spacing:0.01em;
+  transition:opacity 0.3s ease, transform 0.3s ease;
+}
+.track-artist {
+  font-size:18px; color:var(--blue);
+  text-decoration:none; cursor:pointer;
+  transition:opacity 0.3s ease, transform 0.3s ease;
+}
+.track-artist:hover { text-decoration:underline; }
+.track-line { height:1px; width:32px; background:var(--divider); margin-top:2px; }
+
+.tags { display:flex; gap:10px; flex-wrap:wrap; }
+.tag {
+  background:var(--blue-bg);
+  border:1.5px solid var(--blue-border);
+  border-radius:3px; padding:7px 14px 9px;
+  font-size:12px; color:var(--blue); white-space:nowrap;
+}
+
+/* Spotify */
+.spotify-card {
+  width:100%; max-width:345px; height:152px;
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:8px; overflow:hidden;
+  background:rgba(15,15,15,0.85);
+  display:flex; align-items:center; justify-content:center;
+}
+.spotify-card iframe { display:block; }
+.sp-placeholder {
+  font-size:9px; color:rgba(255,255,255,0.22);
+  text-align:center; letter-spacing:0.1em;
+  line-height:1.7; padding:16px;
+}
+
+/* RIGHT — transparent, wheel canvas shows through */
+#right-col { flex:1; position:relative; }
+
+/* ── TRACKLIST ── */
+#tracklist {
+  position:relative; z-index:10;
+  background:#000;
+  border-top:1px solid rgba(255,255,255,0.07);
+  pointer-events:all;
+}
+.tl-head {
+  display:grid;
+  grid-template-columns:52px 1fr 1fr 1fr 140px;
+  padding:10px 80px;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.tl-head span {
+  font-size:8px; letter-spacing:0.22em;
+  text-transform:uppercase; color:rgba(255,255,255,0.22);
+}
+.tl-row {
+  display:grid;
+  grid-template-columns:52px 1fr 1fr 1fr 140px;
+  align-items:center; padding:0 80px;
+  height:60px;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  cursor:pointer; transition:background 0.15s;
+}
+.tl-row:hover { background:rgba(255,255,255,0.025); }
+.tl-row.active { background:rgba(255,255,255,0.055); }
+.tl-num { font-size:10px; color:rgba(255,255,255,0.22); letter-spacing:0.1em; }
+.tl-title {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:18px; letter-spacing:0.04em; color:var(--cream);
+}
+.tl-artist { font-size:12px; font-weight:300; color:rgba(255,255,255,0.38); }
+.tl-video { font-size:9px; color:rgba(255,255,255,0.25); letter-spacing:0.04em; }
+.tl-rider { font-size:9px; color:#c8a84b; text-align:right; letter-spacing:0.08em; }
+.tl-row.active .tl-title { color:#fff; }
+.tl-foot {
+  padding:18px 80px; display:flex;
+  justify-content:space-between; flex-wrap:wrap; gap:8px;
+  border-top:1px solid rgba(255,255,255,0.04);
+}
+.tl-foot span {
+  font-size:7px; letter-spacing:0.18em;
+  text-transform:uppercase; color:rgba(255,255,255,0.14);
+}
+
+/* ── INTRO SCREEN ── */
+#intro {
+  position:fixed; inset:0; z-index:100;
+  background:#0a0a0a;
+  display:flex; flex-direction:column;
+  transition:opacity 0.6s ease;
+}
+#intro.dismissed { opacity:0; pointer-events:none; }
+.intro-inner {
+  flex:1; display:flex; flex-direction:column;
+  justify-content:space-between; padding:40px;
+}
+.intro-top { display:flex; justify-content:space-between; align-items:flex-start; }
+.intro-brand {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:16px; letter-spacing:0.2em; color:rgba(255,255,255,0.4);
+}
+.intro-tag { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:rgba(255,255,255,0.28); }
+.intro-title {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(52px,9vw,120px);
+  line-height:0.92; color:var(--cream);
+}
+.intro-steps {
+  display:flex; gap:40px; flex-wrap:wrap;
+  border-top:1px solid rgba(255,255,255,0.1);
+  padding-top:24px; margin-top:24px;
+}
+.intro-step { display:flex; align-items:flex-start; gap:12px; }
+.step-num {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:40px; color:rgba(255,255,255,0.1); line-height:1;
+}
+.step-text {
+  font-size:9px; letter-spacing:0.14em; text-transform:uppercase;
+  color:rgba(255,255,255,0.35); line-height:1.7; padding-top:4px;
+}
+.intro-bottom {
+  display:flex; align-items:center;
+  justify-content:space-between; gap:24px; flex-wrap:wrap;
+}
+.intro-counter { font-size:9px; letter-spacing:0.18em; text-transform:uppercase; color:rgba(255,255,255,0.22); }
+.intro-btn {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:20px; letter-spacing:0.15em;
+  background:var(--cream); color:#000; border:none;
+  padding:18px 56px; cursor:pointer;
+  display:inline-flex; align-items:center; gap:14px;
+  transition:background 0.18s; pointer-events:all;
+}
+.intro-btn:hover { background:#c8a84b; }
+
+/* ── MOBILE ── */
+@media (max-width:768px) {
+  #header { padding:10px 16px; }
+  .header-eyebrow { display:none; }
+  #main { flex-direction:column; padding-top:57px; min-height:unset; }
+  #left-col {
+    width:100%; max-width:100%;
+    padding:24px 16px 0; gap:24px;
+    order:1; justify-content:flex-start;
+  }
+  .track-title { font-size:clamp(44px,15vw,72px); }
+  #left-col .spotify-card { display:none; }
+  #right-col { order:2; width:100%; min-height:100vw; }
+  #spotify-mobile { display:block; padding:0 16px 40px; order:3; }
+  #spotify-mobile .spotify-card { display:flex; max-width:100%; }
+  .tl-head { grid-template-columns:36px 1fr 80px; padding:8px 16px; }
+  .tl-head span:nth-child(4), .tl-head span:nth-child(5) { display:none; }
+  .tl-row { grid-template-columns:36px 1fr 80px; padding:0 16px; height:52px; }
+  .tl-video, .tl-rider { display:none; }
+  .tl-foot { padding:14px 16px; }
+  .intro-inner { padding:24px 20px; }
+  .intro-title { font-size:clamp(40px,12vw,72px); }
+  .intro-steps { gap:20px; padding-top:16px; }
+  .intro-bottom { flex-direction:column; align-items:stretch; }
+  .intro-btn { justify-content:center; width:100%; padding:18px; }
+}
+@media (min-width:769px) { #spotify-mobile { display:none; } }
+</style>
+</head>
+<body>
+
+<!-- THREE.JS canvas — fixed behind UI -->
+<canvas id="wheel-canvas"></canvas>
+
+<div id="app">
+
+  <header id="header">
+    <div class="header-row">
+      <span class="brand">Skate Radio</span>
+      <span class="header-eyebrow">10 Iconic Tracks · Visual Archive</span>
+      <a href="#" class="btn-playlist">Open Playlist</a>
+    </div>
+    <div class="header-divider"></div>
+  </header>
+
+  <main id="main">
+    <div id="left-col">
+      <div class="featured-block">
+        <div class="featured-meta">
+          <span class="eyebrow">10 Iconic Tracks · Visual Archive</span>
+          <div class="eyebrow-line"></div>
+          <span class="now-featured">Now featured</span>
+        </div>
+        <div class="track-info">
+          <h1 class="track-title" id="track-title">FUNERAL</h1>
+          <a class="track-artist" id="track-artist">Band of Horses</a>
+          <div class="track-line"></div>
+        </div>
+        <div class="tags">
+          <span class="tag" id="tag-rider">Guy Mariano</span>
+          <span class="tag" id="tag-video">Fully Flared</span>
+        </div>
+      </div>
+      <!-- Spotify: desktop -->
+      <div class="spotify-card" id="spotify-card">
+        <div class="sp-placeholder">Add Spotify URL to enable embed</div>
+      </div>
+    </div>
+    <div id="right-col"></div>
+  </main>
+
+  <!-- Spotify: mobile (below wheel) -->
+  <div id="spotify-mobile">
+    <div class="spotify-card" id="spotify-card-mobile">
+      <div class="sp-placeholder">Add Spotify URL to enable embed</div>
+    </div>
+  </div>
+
+  <section id="tracklist">
+    <div class="tl-head">
+      <span>#</span><span>Title</span><span>Artist</span><span>Skate Video</span><span style="text-align:right">Skater</span>
+    </div>
+    <div id="tl-rows"></div>
+    <div class="tl-foot">
+      <span>Skate Radio — Visual Music Archive</span>
+      <span>All rights to respective owners</span>
+    </div>
+  </section>
+
+</div>
+
+<!-- Intro -->
+<div id="intro">
+  <div class="intro-inner">
+    <div class="intro-top">
+      <div class="intro-brand">SKATE.RADIO</div>
+      <div class="intro-tag">10 Iconic Tracks · Visual Archive</div>
+    </div>
+    <div>
+      <div class="intro-title">Iconic<br>Skate Video<br>Songs</div>
+      <div class="intro-steps">
+        <div class="intro-step">
+          <span class="step-num">01</span>
+          <span class="step-text">Click the wheel<br>to spin + shuffle</span>
+        </div>
+        <div class="intro-step">
+          <span class="step-num">02</span>
+          <span class="step-text">Track plays<br>on Spotify</span>
+        </div>
+        <div class="intro-step">
+          <span class="step-num">03</span>
+          <span class="step-text">Hover to<br>tilt the wheel</span>
+        </div>
+      </div>
+    </div>
+    <div class="intro-bottom">
+      <div class="intro-counter">52mm · 7-ball bearing · wireframe mesh</div>
+      <button class="intro-btn" id="intro-btn">
+        <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
+          <path d="M1 1l10 6-10 6V1z" fill="#000"/>
+        </svg>
+        Start Playing
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ══════════════════════════════════════
+// SPOTIFY CONFIG — paste your URL here
+const SPOTIFY_PLAYLIST_URL = '';
+// ══════════════════════════════════════
+
+const TRACKS = [
+  { num:'01', artist:'Band of Horses',   title:'Funeral',                         video:'Fully Flared',  rider:'Guy Mariano',    sp:'5lRzWDEe7UuedU2QPsFg0K' },
+  { num:'02', artist:'Santo & Johnny',   title:'Sleepwalk',                       video:'Suffer the Joy',rider:'Nick Trapasso',  sp:'2nTQQHAj7NhHNYrLQuDna7' },
+  { num:'03', artist:'Metallica',         title:'Orion',                           video:'DC Video',      rider:'Danny Way',      sp:'1JwORKunemKERUUYMfmCBm' },
+  { num:'04', artist:'Notorious B.I.G.', title:"Let's Get It On",                 video:'Baker 3',       rider:'Antwuan Dixon',  sp:'16kWYnwzOGR5NBpdQClwqg' },
+  { num:'05', artist:'The Killers',       title:"All These Things That I've Done", video:'Fully Flared',  rider:'Daewon Song',    sp:'4yyMjJrrjaDRXyIoM4JbbC' },
+  { num:'06', artist:'Arcade Fire',       title:'No Cars Go',                      video:'Fully Flared',  rider:'Intro',          sp:'51xBgzcyzojRpqFW2ICQAB' },
+  { num:'07', artist:'Joy Division',      title:'Love Will Tear Us Apart',         video:'Yeah Right!',   rider:'Marc Johnson',   sp:'2jYP6P1pp4grhooN6LDKbo' },
+  { num:'08', artist:'Dinosaur Jr.',      title:'Kracked',                         video:'Video Days',    rider:'Guy Mariano',    sp:'2ELM3h9xMrWvxy1S9HQoBD' },
+  { num:'09', artist:'The Hu',            title:'Wolf Totem',                      video:'Bronson',       rider:'David Gravette', sp:'1I2t2HQmSByhoVRlPDAZOv' },
+  { num:'10', artist:'Rod Stewart',       title:'Young Turks',                     video:'Bag of Suck',   rider:'Various',        sp:'6vezarXrEyu0zN5WjJqGfg'  },
+];
+
+let currentIdx = 0;
+
+// ── SPOTIFY ──
+function loadSpotify(t) {
+  const isMob = window.innerWidth <= 768;
+  const cardId = isMob ? 'spotify-card-mobile' : 'spotify-card';
+  const card = document.getElementById(cardId);
+  const url = SPOTIFY_PLAYLIST_URL.trim();
+  if (url) {
+    const m = url.match(/playlist\/([a-zA-Z0-9]+)/);
+    const src = m ? 'https://open.spotify.com/embed/playlist/' + m[1] + '?utm_source=generator&theme=0&autoplay=1' : url;
+    card.innerHTML = '<iframe src="' + src + '" width="100%" height="152" frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" style="display:block;border-radius:8px;"></iframe>';
+  } else if (t && t.sp) {
+    card.innerHTML = '<iframe src="https://open.spotify.com/embed/track/' + t.sp + '?utm_source=generator&theme=0&autoplay=1" width="100%" height="152" frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" style="display:block;border-radius:8px;"></iframe>';
+  }
+}
+
+// ── SET FEATURED ──
+function setFeatured(idx, animate) {
+  var t = TRACKS[idx];
+  var titleEl  = document.getElementById('track-title');
+  var artistEl = document.getElementById('track-artist');
+  var riderEl  = document.getElementById('tag-rider');
+  var videoEl  = document.getElementById('tag-video');
+
+  function applyUpdate() {
+    titleEl.textContent  = t.title.toUpperCase();
+    artistEl.textContent = t.artist;
+    riderEl.textContent  = t.rider;
+    videoEl.textContent  = t.video;
+    loadSpotify(t);
+    document.querySelectorAll('.tl-row').forEach(function(r, i) {
+      r.classList.toggle('active', i === idx);
+    });
+  }
+
+  if (animate) {
+    titleEl.style.transition  = 'none';
+    artistEl.style.transition = 'none';
+    titleEl.style.opacity     = '0';
+    artistEl.style.opacity    = '0';
+    titleEl.style.transform   = 'translateY(8px)';
+    artistEl.style.transform  = 'translateY(8px)';
+    setTimeout(function() {
+      applyUpdate();
+      requestAnimationFrame(function() {
+        titleEl.style.transition  = 'opacity 0.32s ease, transform 0.32s ease';
+        artistEl.style.transition = 'opacity 0.32s ease, transform 0.32s ease';
+        titleEl.style.opacity     = '1';
+        artistEl.style.opacity    = '1';
+        titleEl.style.transform   = 'translateY(0)';
+        artistEl.style.transform  = 'translateY(0)';
+      });
+    }, 140);
+  } else {
+    applyUpdate();
+  }
+}
+
+// ── SHUFFLE ──
+function shuffle() {
+  var next;
+  do { next = Math.floor(Math.random() * TRACKS.length); } while (next === currentIdx && TRACKS.length > 1);
+  currentIdx = next;
+  setFeatured(next, true);
+}
+
+// ── TRACKLIST ──
+function initTracklist() {
+  var wrap = document.getElementById('tl-rows');
+  TRACKS.forEach(function(t, i) {
+    var row = document.createElement('div');
+    row.className = 'tl-row' + (i === 0 ? ' active' : '');
+    row.innerHTML =
+      '<span class="tl-num">'    + t.num    + '</span>' +
+      '<span class="tl-title">'  + t.title.toUpperCase() + '</span>' +
+      '<span class="tl-artist">' + t.artist + '</span>' +
+      '<span class="tl-video">'  + t.video  + '</span>' +
+      '<span class="tl-rider">'  + t.rider  + '</span>';
+    row.addEventListener('click', function(e) {
+      e.stopPropagation();
+      currentIdx = i;
+      setFeatured(i, true);
+      if (window._wheelKick) window._wheelKick();
+    });
+    wrap.appendChild(row);
+  });
+}
+
+// ══════════════════════════════════════
+// THREE.JS WHEEL
+// ══════════════════════════════════════
+window.addEventListener('DOMContentLoaded', function() {
+
+  var canvas = document.getElementById('wheel-canvas');
+  var W = window.innerWidth;
+  var H = window.innerHeight;
+  canvas.width  = W;
+  canvas.height = H;
+
+  // WebGL check
+  var testCtx = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!testCtx) {
+    canvas.style.display = 'none';
+    return;
+  }
+
+  var renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+  } catch(e) {
+    canvas.style.display = 'none';
+    return;
+  }
+  renderer.setSize(W, H, true);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0x000000, 1);
+
+  var scene  = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(32, W / H, 0.1, 100);
+
+  function wireMat(op) {
+    return new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: op });
+  }
+  function dotMat(sz, op) {
+    return new THREE.PointsMaterial({ color: 0xffffff, size: sz, sizeAttenuation: true, transparent: true, opacity: op });
+  }
+  function sideMat(op) {
+    return new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: op, side: THREE.DoubleSide });
+  }
+
+  function addWireDots(geo, wOp, pSz, pOp, parent) {
+    parent.add(new THREE.Mesh(geo, wireMat(wOp)));
+    var pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', geo.attributes.position);
+    parent.add(new THREE.Points(pg, dotMat(pSz, pOp)));
+  }
+
+  function makeBearing(zOff, OR, IR, BH, BR, BO, parent) {
+    var g = new THREE.Group();
+    g.position.z = zOff;
+
+    var orC = new THREE.CylinderGeometry(OR, OR, BH, 55, 1, true);
+    orC.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    addWireDots(orC, 0.58, 0.014, 0.65, g);
+
+    var orCap = new THREE.RingGeometry(OR * 0.82, OR, 55);
+    [BH/2, -BH/2].forEach(function(z) {
+      var c = new THREE.Mesh(orCap, wireMat(0.50)); c.position.z = z; g.add(c);
+    });
+
+    var irC = new THREE.CylinderGeometry(IR, IR, BH + 0.05, 35, 1, true);
+    irC.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    addWireDots(irC, 0.58, 0.014, 0.58, g);
+
+    var irCap = new THREE.RingGeometry(IR * 0.36, IR, 35);
+    [(BH + 0.05)/2, -(BH + 0.05)/2].forEach(function(z) {
+      var c = new THREE.Mesh(irCap, wireMat(0.50)); c.position.z = z; g.add(c);
+    });
+
+    var shG = new THREE.RingGeometry(IR + 0.004, OR - 0.006, 55);
+    [-BH * 0.18, BH * 0.18].forEach(function(z) {
+      var s = new THREE.Mesh(shG, sideMat(0.14)); s.position.z = z; g.add(s);
+    });
+
+    for (var i = 0; i < 7; i++) {
+      var a = (i / 7) * Math.PI * 2;
+      var bx = Math.cos(a) * BO, by = Math.sin(a) * BO;
+      var bG = new THREE.SphereGeometry(BR, 12, 12);
+      var bf = new THREE.Mesh(bG, wireMat(0.75));
+      bf.position.set(bx, by, 0);
+      g.add(bf);
+      var pgb = new THREE.BufferGeometry();
+      pgb.setAttribute('position', bG.attributes.position);
+      var bd = new THREE.Points(pgb, dotMat(0.015, 0.80));
+      bd.position.set(bx, by, 0);
+      g.add(bd);
+    }
+
+    [OR*0.93, OR*0.68, OR*0.46, IR*1.45].forEach(function(r, i) {
+      var rg = new THREE.RingGeometry(r - 0.005, r, 80);
+      var rm = new THREE.Mesh(rg, sideMat(0.17 - i * 0.03));
+      rm.position.z = BH / 2 + 0.003;
+      g.add(rm);
+    });
+
+    parent.add(g);
+  }
+
+  var root       = new THREE.Group(); scene.add(root);
+  var spinGroup  = new THREE.Group(); root.add(spinGroup);
+  var fixedGroup = new THREE.Group(); root.add(fixedGroup);
+
+  // Blueprint: 52mm dia, 31mm wide
+  var R=1.0, HW=0.298, HUB=0.423, EDGE=0.095;
+  var OR=0.400, IR=0.155, BH=0.22, BR=0.068, BO=(0.400+0.155)/2, NR=0.095;
+  var BEAR_Z = HW - BH/2;
+  var SPACE  = Math.max(0.01, 2*HW - 2*BH - 0.008);
+
+  // Wheel body
+  var pts = [];
+  function pv(r, y) { pts.push(new THREE.Vector2(r, y)); }
+  for (var i=0; i<=8; i++) { var a=(i/8)*(Math.PI/2); pv((R-EDGE)+EDGE*Math.sin(a), -HW+EDGE*(1-Math.cos(a))); }
+  pv(R, -HW+EDGE); pv(R, HW-EDGE);
+  for (var i=1; i<=8; i++) { var a=(i/8)*(Math.PI/2); pv((R-EDGE)+EDGE*Math.cos(Math.PI/2-a), HW-EDGE+EDGE*Math.sin(a)); }
+  pv(R-EDGE, HW);
+  for (var i=1; i<=10; i++) { var t=i/10; pv((R-EDGE)-t*((R-EDGE)-HUB), HW); }
+  pv(HUB, HW); pv(HUB-0.015, HW-0.03);
+  for (var i=1; i<=5; i++) pv(HUB-0.015, HW-0.03-i*(2*(HW-0.03))/5);
+  pv(HUB-0.015, -(HW-0.03)); pv(HUB, -HW);
+  for (var i=1; i<=10; i++) { var t=i/10; pv(HUB+t*((R-EDGE)-HUB), -HW); }
+  pv(R-EDGE, -HW);
+
+  var lathe = new THREE.LatheGeometry(pts, 100);
+  lathe.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+  addWireDots(lathe, 0.13, 0.016, 0.85, spinGroup);
+
+  makeBearing(+BEAR_Z, OR, IR, BH, BR, BO, spinGroup);
+  makeBearing(-BEAR_Z, OR, IR, BH, BR, BO, spinGroup);
+
+  if (SPACE > 0.01) {
+    var sp = new THREE.CylinderGeometry(IR*1.06, IR*1.06, SPACE, 35, 1, true);
+    sp.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    spinGroup.add(new THREE.Mesh(sp, wireMat(0.30)));
+  }
+
+  // Hex nut
+  var nC = new THREE.CylinderGeometry(NR, NR, 0.14, 6);
+  nC.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+  var nm = new THREE.Mesh(nC, wireMat(0.95));
+  nm.position.z = BEAR_Z + BH/2 + 0.08;
+  fixedGroup.add(nm);
+
+  var hfMesh = new THREE.Mesh(new THREE.CircleGeometry(NR, 6), wireMat(0.85));
+  hfMesh.position.z = BEAR_Z + BH/2 + 0.155;
+  fixedGroup.add(hfMesh);
+
+  var wsF = new THREE.Mesh(new THREE.RingGeometry(NR, NR*1.4, 40), wireMat(0.40));
+  wsF.position.z = BEAR_Z + BH/2 + 0.005;
+  fixedGroup.add(wsF);
+
+  var wsB = new THREE.Mesh(new THREE.RingGeometry(NR, NR*1.4, 40), wireMat(0.28));
+  wsB.position.z = -(BEAR_Z + BH/2 + 0.005);
+  fixedGroup.add(wsB);
+
+  var ax = new THREE.CylinderGeometry(0.022, 0.022, 1.1, 8);
+  ax.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+  fixedGroup.add(new THREE.Mesh(ax, wireMat(0.18)));
+
+  // Particles
+  var pPos = new Float32Array(225 * 3);
+  for (var i = 0; i < 225; i++) {
+    var r = 1.3 + Math.random()*0.9, t = Math.random()*Math.PI*2, ph = Math.random()*Math.PI*2;
+    pPos[i*3]   = Math.cos(t) * r;
+    pPos[i*3+1] = Math.sin(t) * r * 0.5;
+    pPos[i*3+2] = Math.sin(ph) * 0.4;
+  }
+  var ptG = new THREE.BufferGeometry();
+  ptG.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
+  scene.add(new THREE.Points(ptG, dotMat(0.010, 0.28)));
+
+  // ── Position wheel in right column on desktop ──
+  function applyTransform() {
+    var mob = window.innerWidth <= 768;
+    if (mob) {
+      root.position.set(0, 0, 0);
+      root.scale.set(0.72, 0.72, 0.72);
+      camera.position.set(0, 0, 3.2);
+    } else {
+      // Desktop: right column starts at ~36% viewport width
+      // Shift wheel right so it centers in the remaining 64%
+      // Right col center = 36% + 32% = 68% of viewport = +0.36 in NDC * aspect correction
+      root.position.set(0.68, 0, 0);
+      root.scale.set(1.28, 1.28, 1.28);
+      camera.position.set(0, 0, 3.8);
+    }
+    camera.updateProjectionMatrix();
+  }
+  applyTransform();
+
+  // ── INTERACTIONS ──
+  var TILT_X = 0.06;
+  root.rotation.x = TILT_X;
+  var mouseX = 0, tiltY = 0, spinVel = 0, spinAngle = 0;
+
+  document.addEventListener('mousemove', function(e) {
+    mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+  });
+
+  window._wheelKick = function() { spinVel += 0.36 + Math.random() * 0.14; };
+
+  var started = false;
+  function startExp() {
+    if (started) return;
+    started = true;
+    document.getElementById('intro').classList.add('dismissed');
+    loadSpotify(TRACKS[currentIdx]);
+    spinVel += 0.6 + Math.random() * 0.2;
+    shuffle();
+  }
+
+  document.getElementById('intro-btn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    startExp();
+  });
+
+  document.addEventListener('click', function(e) {
+    var tag = e.target.tagName.toLowerCase();
+    if (tag === 'button' || tag === 'a' || tag === 'iframe') return;
+    if (e.target.closest('#tracklist') || e.target.closest('#intro')) return;
+    if (!started) { startExp(); return; }
+    spinVel += 0.44 + Math.random() * 0.18;
+    shuffle();
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    tiltY += (mouseX * 0.75 - tiltY) * 0.055;
+    root.rotation.y = tiltY;
+    root.rotation.x = TILT_X + Math.sin(Date.now() * 0.0007) * 0.012;
+    spinVel *= 0.968;
+    spinAngle += spinVel;
+    spinGroup.rotation.z = spinAngle;
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', function() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    renderer.setSize(W, H, true);
+    camera.aspect = W / H;
+    applyTransform();
+  });
+});
+
+// Init
+initTracklist();
+setFeatured(0, false);
+</script>
+</body>
+</html>
